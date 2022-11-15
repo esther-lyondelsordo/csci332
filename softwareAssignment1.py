@@ -10,7 +10,7 @@ import math
 import numpy as np
 
 
-class KruskalMST:
+class kruskalClass:
     # initialize class values
     def __init__(self, graph, mst):
         self.name = graph
@@ -66,15 +66,32 @@ class KruskalMST:
         right = a[mid + 1 : hi + 1]
 
         # sort subarrays recursively
-        left = KruskalMST.mergesort(left)
-        right = KruskalMST.mergesort(right)
+        left = kruskalClass.mergesort(left)
+        right = kruskalClass.mergesort(right)
 
-        return KruskalMST.merge(left, right)
+        return kruskalClass.merge(left, right)
 
-    # build union-find data structure
-    def makeUnionFind(S):
-        # Convert a set ‘S’ into a union-find data structure F
-        return -1
+    """
+    build the union-find data structure
+    input N is the number of nodes in the graph
+    return a dictionary
+    key = number labels a connected component
+    value = array of pointers to nodes in that connected component
+    """
+
+    def makeUnionFind(N):
+        # Make one big array of all of the nodes, named 1 to N
+        arrayOfNodes = np.array(range(1, N + 1))
+
+        # Split the array into an array of arrays
+        newArray = np.split(arrayOfNodes, N)
+
+        # use the new array to make a dictionary,
+        # each key is the same number as the single array entry value
+        u = dict(list(enumerate(newArray, start=1)))
+
+        # If two nodes are connected, assign the parent to the representative node
+        return u
 
     # find function
     def find(u):
