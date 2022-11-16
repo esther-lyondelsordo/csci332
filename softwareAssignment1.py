@@ -10,20 +10,47 @@ import numpy as np
 
 
 class kruskalClass:
-    # initialize class values FIXME
-    def __init__(self, graph):
+    # initialize class values
+    def __init__(self, graph, unionFind):
         self.graph = graph
+        self.unionFind = unionFind
 
-    # Function to return a class instance FIXME
+    # Function to return a class instance
     def kruskalClass(self):
         return kruskalClass()
 
-    # find MST from an adjacency matrix TODO
+    # find MST from an adjacency matrix
+    # if A_ij > 0 there is an edge from node i to node j
+    # returns MST T, also in adjacency matrix form
     def findMinimumSpanningTree(A):
-        # if A_ij > 0 there is an edge from node i to node j
-        # returns MST T, also in adjacency matrix form
-        return -1
+        n = len(A[0])  # number of nodes in A
+        T = np.zeros_like(A)  # the Tree to output, initialized to zeros
+        u = kruskalClass.makeUnionFind(n)
 
+        # make weights into a 1D array and sort the edge weights
+        weights = np.array([])
+        weights = np.append(weights, A[0:])
+        weights = kruskalClass.mergesort(weights)
+
+        # Loop through weights, check if added already
+        # if added, skip to next weight, if not,
+        # union the nodes of that edge and add the edge to T
+        i = 0
+        numChecked = 0
+        numWeights = np.count_nonzero(weights)
+        while numChecked <= numWeights:
+            w = weights[i]
+            node1, node2 = np.where(A == w)
+            if w != 0:
+                if kruskalClass.find(u, node1) != kruskalClass.find(u, node2):
+                    T[node1][node2] = w
+                    u = kruskalClass.union(node1, node2)
+
+        return T
+
+    """
+    Other methods below:
+    """
     # merge method for mergesort
     def merge(left, right):
         arr = np.array([])
@@ -95,7 +122,7 @@ class kruskalClass:
         # If two nodes are connected, assign the parent to the representative node
         return u
 
-    # union function TODO
+    # union function
     # Combine the connected components given by sets named s1 and s2 from u_in
     def union(u_in, s1, s2):
         # find the which set is smaller, rename sets for DRY code
@@ -112,20 +139,21 @@ class kruskalClass:
         # change root of all elements in smaller set to root of larger set
         for i in range(len(u_in[small])):
             temp = u_in[small][i]
-            u_in[temp].key = u_in[big].key
+            u_in[temp][0] = u_in[big][0]
 
         # change name of smaller to name of larger set
-        u_in[small].key = u_in[big].key
+        u_in[small][0] = u_in[big][0]
 
         # return the updated union-find data structure
         u_out = u_in
         return u_out
 
-    # find function TODO
+    # find function
     # u is the union find data structure and v is the index of a graph node
     # return the label of the set that v belongs to, s
     def find(u, v):
+        # check if v is one of the roots?
         s = -1
-        # the key of the desired index is the name of the root of that set
-        s = u[v].key
+        # the first element of the array at index v is the name of the root of that set
+        s = u[v][0]
         return s
