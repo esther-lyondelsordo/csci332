@@ -2,21 +2,23 @@
 CSCI 332
 Esther Lyon Delsordo
 Software Assignment #1
-Due November 14, 2022
+Due November 16, 2022
 
 Implement Kruskal's algorithm to find the MST of a weighted graph
 """
-import math
 import numpy as np
 
 
 class kruskalClass:
-    # initialize class values
-    def __init__(self, graph, mst):
-        self.name = graph
-        self.age = mst
+    # initialize class values FIXME
+    def __init__(self, graph):
+        self.graph = graph
 
-    # find MST from an adjacency matrix
+    # Function to return a class instance FIXME
+    def kruskalClass(self):
+        return kruskalClass()
+
+    # find MST from an adjacency matrix TODO
     def findMinimumSpanningTree(A):
         # if A_ij > 0 there is an edge from node i to node j
         # returns MST T, also in adjacency matrix form
@@ -93,12 +95,37 @@ class kruskalClass:
         # If two nodes are connected, assign the parent to the representative node
         return u
 
-    # find function
-    def find(u):
-        # Return the connected component of the element ‘u’ in ‘S’
-        return -1
+    # union function TODO
+    # Combine the connected components given by sets named s1 and s2 from u_in
+    def union(u_in, s1, s2):
+        # find the which set is smaller, rename sets for DRY code
+        if len(u_in[s1]) <= len(u_in[s2]):
+            small = s1
+            big = s2
+        else:
+            small = s2
+            big = s1
 
-    # union function
-    def union(A, B):
-        # Combine the connected components given by node sets ‘A’ and ‘B’ into set C
-        return -1
+        # copy elements of smaller set into larger set
+        u_in[big] = np.append(u_in[big], u_in[small][1:])
+
+        # change root of all elements in smaller set to root of larger set
+        for i in range(len(u_in[small])):
+            temp = u_in[small][i]
+            u_in[temp].key = u_in[big].key
+
+        # change name of smaller to name of larger set
+        u_in[small].key = u_in[big].key
+
+        # return the updated union-find data structure
+        u_out = u_in
+        return u_out
+
+    # find function TODO
+    # u is the union find data structure and v is the index of a graph node
+    # return the label of the set that v belongs to, s
+    def find(u, v):
+        s = -1
+        # the key of the desired index is the name of the root of that set
+        s = u[v].key
+        return s
