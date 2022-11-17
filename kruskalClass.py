@@ -2,7 +2,7 @@
 CSCI 332
 Esther Lyon Delsordo
 Software Assignment #1
-Due November 16, 2022
+Due November 18, 2022
 
 Implement Kruskal's algorithm to find the MST of a weighted graph
 """
