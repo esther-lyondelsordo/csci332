@@ -27,3 +27,20 @@ class segmentationClass:
 
     def segmentImage(Img):
         return -1
+
+    # Ford Fulkerson (FF) Alg for Max Flow
+    def findMaxFlow(G):
+        return -1
+
+    # make residual graph for FF
+    def makeResidualGraph(G):
+        return -1
+
+    # augment a path in the residual graph for FF
+    def augment(path, flow):
+        return -1
+
+    # bottleneck function for augment function
+    # finds the minimum residual capacity on any edge in an s-t path
+    def bottleneck(path, flow):
+        return -1
