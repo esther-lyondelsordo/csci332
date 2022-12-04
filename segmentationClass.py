@@ -14,9 +14,9 @@ import numpy as np
 class segmentationClass:
     # Function to return a class instance
     def segmentationClass(self, p0, x_a, x_b):
-        self.p0 = p0
-        self.x_a = x_a
-        self.x_b = x_b
+        self.p0 = p0  # penalty for two pixels being neighbors
+        self.x_a = x_a  # coordinates of a chosen foreground pixel
+        self.x_b = x_b  # coordinates of a chosen background pixel
         return segmentationClass()
 
     # init class, do I need this? FIXME
@@ -41,10 +41,16 @@ class segmentationClass:
         return -1
 
     # make the graph with source and sink nodes from the pixel arrays
+    # I used the adjacency list representation FIXME ?
     def makeGraph(Img):
         # set all flows to zero initially?
         # return G
-        return -1
+        N = len(Img[0]) + 2  # add two for source and sink nodes
+        graph = {}
+        # make edges from source to all pixels
+        # make edges from sink to all pixels
+        # make edges between all pixels and their L,R,U,D neighbors
+        return graph
 
     # Ford Fulkerson (FF) Alg for Max Flow
     def findMaxFlow(G):
@@ -92,6 +98,8 @@ class segmentationClass:
         else:
             return 0
 
+    # The probability a pixel is in the foreground
+    # Defined as 442 - dist from x to x_a
     def foregroundProb(x):
         # calculate Euclidean distance from x to x_a
         d = np.sqrt(
@@ -113,7 +121,8 @@ class segmentationClass:
     # This makes more sense for FF
     # This implementation is based on one from Fahadul Shadhin via Medium
     # URL: https://medium.com/geekculture/depth-first-search-dfs-algorithm-with-python-2809866cb358
-    # original version is for adjacency list graph rep FIXME
+    # original version is for adjacency list graph rep FIXME?
+    # adjacency matrix version: https://www.geeksforgeeks.org/implementation-of-dfs-using-adjacency-matrix/
     def dfs(graph, source, visited, dfs_traversal):
         if source not in visited:
             dfs_traversal.append(source)
@@ -124,7 +133,7 @@ class segmentationClass:
 
         return dfs_traversal
 
-    # main function with driver code for dfs
+    # main function with driver code for dfs FIXME
     def main():
         visited = set()
         dfs_traversal = list()
