@@ -11,3 +11,6 @@ Test script for segmentationClass.py
 """
 
 import numpy as np
+import segmentationClass
+
+sc = segmentationClass.segmentationClass()
