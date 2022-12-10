@@ -16,15 +16,23 @@ Vertex class to build graph nodes
 
 
 class vertex:
-    def __init__(self, key, pos, rgb, edgesIn, edgesOut, capacities, dim, flows):
+    def __init__(
+        self, key, pos, rgb, edgesIn, edgesOut, capacities, dim, flows, fg, bg
+    ):
         self.key = key
         self.pos = pos
         self.rgb = rgb
-        self.edgesIn = []
-        self.edgesOut = []
-        self.capacities = {}
+        self.edgesIn = []  # keys of nodes this node has edges from
+        self.edgesOut = []  # keys of nodes this node points to
+        self.capacities = (
+            {}
+        )  # key = key of other node in edge, value = [capacity of edge in, capacity of edge out]
         self.dim = dim  # Image dimension (pixels), square images only
-        self.flows = [dim * (dim + 2)]
+        self.flows = (
+            {}
+        )  # key = key of other node in edge, value = [flow on edge in, flow on edge out]
+        self.fg = False
+        self.bg = False
 
 
 """
@@ -38,10 +46,6 @@ class segmentationClass:
         self.p0 = p0
         self.x_a = x_a
         self.x_b = x_b
-
-    # Initialize graph and residual graph
-    G = []
-    Gf = []
 
     """
     Input: I is an NxNx3 numpy array representing a color (RGB) image. Each pixel
@@ -62,8 +66,8 @@ class segmentationClass:
         key = 0
         for i in range(N):
             for j in range(N):
-                newNode = vertex(key, [i, j], I[i][j])
-                G = np.append(G, newNode)
+                newNode = vertex(key, [i, j], I[i][j], dim=N)
+                G = np.append(newNode)
                 key += 1
 
         # Connect Graph pixel nodes to their neighbors
@@ -71,29 +75,49 @@ class segmentationClass:
             for neighbor in G[node.key :]:
                 d = np.sqrt(((node.pos - neighbor.pos) ** 2).sum())
                 if d < 2:
-                    node.edgesIn.append(node.edgesIn, neighbor.key)
-                    node.edgesOut.append(node.edgesOut, neighbor.key)
+                    # make edge from neighbor to node
+                    node.edgesIn.append(neighbor.key)
+
+                    # make edge from node to neighbor
+                    node.edgesOut.append(neighbor.key)
+
+                    # set capacities of both edges to p0
+                    node.capacities[neighbor.key] = [segmentationClass.p0] * 2
+
+                    # set all new edge flows to zero
+                    node.flows[neighbor.key] = [0] * 2
 
         # Add source and sink nodes to graph
-        source = vertex(key)
-        sink = vertex(key + 1)
-        G.append(G, source)
-        G.append(G, sink)
+        source = vertex(key, dim=N)
+        sink = vertex(key + 1, dim=N)
+        G.append(source)
+        G.append(sink)
 
         # connect source and sink to all pixel nodes
         for node in G[:-2]:
-            source.edgesOut.append(source.edgesOut, node.key)
-            sink.edgesIn.append(sink.edgesIn, node.key)
+            # connect source and sink to all nodes
+            source.edgesOut.append(node.key)
+            sink.edgesIn.append(node.key)
+
+            # set capacities on edges from source and to sink
+            source.capacities[node.key] = [0, segmentationClass.foregroundProb(node, G)]
+            source.capacities[node.key] = [segmentationClass.backgroundProb(node, G), 0]
+
+            # set flows to zero on all new edges
+            source.flows[node.key] = [0] * 2
+            sink.flows[node.key] = [0] * 2
 
         # call FF on graph
 
-        # classify nodes as FG or BG by checking FG and BG probs
+        # classify nodes as FG or BG by checking
+        # if each node is connected to FG, if not, they are in BG
 
         # return N*N*1 array, last dim is class 0 (BG) or 1 (FG)
         return -1
 
-    # Ford Fulkerson (FF) Alg for Max Flow
-    def findMaxFlow(G):
+    # Ford Fulkerson (FF) Alg for Min Cut
+    # remove edges from graph to produce min cut
+    def findMinCut(G):
         # all flows in G start at 0
         # while there is an s-t path in residual graph G'
         # (use bfs or dfs to find an s-t path)
@@ -105,75 +129,56 @@ class segmentationClass:
         # return f
         return -1
 
-    # augment a path in the residual graph for FF
-    def augment(path, flow):
-        b = segmentationClass.bottleneck(path, flow)
-        # for each edge (u,v) in path P
-        # if e = (u,v) is a forward edge
-        # f(e) += b in G
-        # if (u,v) is a backward edge
-        # let e = (v,u)
-        # f(e) -= b in G
-        # endfor
-        # return flow
+    # BFS for FF
+    # This makes my FF the Edmonds-Karp variation of the algorithm
+    # reference: https://www.geeksforgeeks.org/minimum-cut-in-a-directed-graph/?ref=rp
+    # parent is a list to store the s-t path
+    def bfs(Gf, s, t, parent):
+        # list to store visited nodes
+        visited = [False] * len(Gf)
+
+        # queue for BFS
+        queue = []
+
+        # add source to queue and mark as visited
+        queue.append(s)
+        visited[s.key] = True
+
+        # BFS loop
+        while queue:
+            # dequeue first node in queue
+            u = queue.pop(0)
+
+            # Get all adjacent vertices of the dequeued vertex u
+            # If a adjacent has not been visited, then mark it
+            # visited and enqueue it
+            for node in s.edgesOut:
+                if visited[node] == False and s.capacities[node][1] > 0:
+                    queue.append(node)
+                    visited[node.key] = True
+                    parent[node.key] = u
+
+        return True if visited[t] else False
+
+    # FIXME remove?
+    # DFS to traverse the original graph?
+    def dfs(G):
         return -1
 
-    # bottleneck function for augment function
-    # finds the minimum residual capacity on any edge in an s-t path
-    def bottleneck(path, flow):
-        # traverse all edges in path, find the smallest capacity, c
-        # return c - flow
-        return -1
-
-    # determines capacity between pixel nodes
-    def neighborCapacity(u, v):
-        # calculate Euclidean distance from u to v
-        d = np.sqrt((v[0] - u[0]) ** 2 + (v[1] - u[1]) ** 2)
-        if d < 2:
-            return segmentationClass.p0
-        else:
-            return 0
-
-    # FIXME
-    # The probability a pixel is in the foreground
+    # The probability a pixel node is in the foreground
     # Defined as 442 - Euclidean dist between RBG vals of x and x_a
-    def foregroundProb(x):
-        # calculate Euclidean distance from x to x_a
-        d = np.sqrt(
-            (segmentationClass.x_a[0] - x[0]) ** 2
-            + (segmentationClass.x_a[1] - x[1]) ** 2
-        )
+    def foregroundProb(x, G):
+        N = np.sqrt(len(G) - 2)
+        Grid = np.reshape(G, (-1, N))
+        x_a_key = Grid[segmentationClass.x_a[0], segmentationClass.x_a[1]].key
+        d = np.round(np.sqrt(((Grid[x_a_key].rgb - x.rgb) ** 2).sum()))
         return 442 - d
 
-    # FIXME
-    # The probability a pixel is in the background
+    # The probability a pixel node is in the background
     # Defined as 442 - Euclidean dist between RBG vals of x and x_b
-    def backgroundProb(x):
-        # calculate Euclidean distance from x to x_b
-        d = np.sqrt(
-            (segmentationClass.x_b[0] - x[0]) ** 2
-            + (segmentationClass.x_b[1] - x[1]) ** 2
-        )
+    def backgroundProb(x, G):
+        N = np.sqrt(len(G) - 2)
+        Grid = np.reshape(G, (-1, N))
+        x_b_key = Grid[segmentationClass.x_b[0], segmentationClass.x_b[1]].key
+        d = np.round(np.sqrt(((Grid[x_b_key].rgb - x.rgb) ** 2).sum()))
         return 442 - d
-
-    # DFS Algorithm for FF
-    # Faster than BFS and goes to end of a path first
-    # This makes more sense for FF
-    # This implementation is based on one from Fahadul Shadhin via Medium
-    # URL: https://medium.com/geekculture/depth-first-search-dfs-algorithm-with-python-2809866cb358
-    # original version is for adjacency list graph rep FIXME?
-    # adjacency matrix version: https://www.geeksforgeeks.org/implementation-of-dfs-using-adjacency-matrix/
-    def dfs(graph, source, visited, dfs_traversal):
-        if source not in visited:
-            dfs_traversal.append(source)
-            visited.add(source)
-
-        for neighbor_node in graph[source]:
-            segmentationClass.dfs(graph, neighbor_node, visited, dfs_traversal)
-
-        return dfs_traversal
-
-    # main function with driver code for dfs FIXME
-    def main():
-        visited = set()
-        dfs_traversal = list()
