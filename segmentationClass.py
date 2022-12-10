@@ -17,22 +17,23 @@ Vertex class to build graph nodes
 
 class vertex:
     def __init__(
-        self, key, pos, rgb, edgesIn, edgesOut, capacities, dim, flows, fg, bg
+        self,
+        key,
+        dim,
+        pos=np.array([]),
+        rgb=np.array([]),
+        edgesIn=[],
+        edgesOut=[],
+        capacities={},
     ):
         self.key = key
+        self.dim = dim  # Image dimension (pixels), square images only
         self.pos = pos
         self.rgb = rgb
-        self.edgesIn = []  # keys of nodes this node has edges from
-        self.edgesOut = []  # keys of nodes this node points to
-        self.capacities = (
-            {}
-        )  # key = key of other node in edge, value = [capacity of edge in, capacity of edge out]
-        self.dim = dim  # Image dimension (pixels), square images only
-        self.flows = (
-            {}
-        )  # key = key of other node in edge, value = [flow on edge in, flow on edge out]
-        self.fg = False
-        self.bg = False
+        self.edgesIn = edgesIn  # keys of nodes this node has edges from
+        self.edgesOut = edgesOut  # keys of nodes this node points to
+        self.capacities = capacities  # key = key of other node in edge,
+        # value = [capacity of edge in to other node, capacity of edge out of other node]
 
 
 """
@@ -56,19 +57,27 @@ class segmentationClass:
     have L[i,j] = 0.
     """
 
-    def segmentImage(I):
-        N = len(I.shape[0])  # get image dimension
+    def segmentImage(self, I):
+        N = I.shape[0]  # get image dimension
         G = []  # initialize graph
         Gf = []  # initialize residual graph
 
         # build graph
         # make each pixel a vertex and add to graph
-        key = 0
+        k = 0
         for i in range(N):
             for j in range(N):
-                newNode = vertex(key, [i, j], I[i][j], dim=N)
-                G = np.append(newNode)
-                key += 1
+                print("k: ", k)
+                newNode = vertex(
+                    key=k,
+                    dim=N,
+                    pos=np.array([i, j]),
+                    rgb=(np.rint(I[i][j])).astype(
+                        int
+                    ),  # round float rgb vals to nearest int
+                )
+                G.append(newNode)
+                k += 1
 
         # Connect Graph pixel nodes to their neighbors
         for node in G:
@@ -82,14 +91,14 @@ class segmentationClass:
                     node.edgesOut.append(neighbor.key)
 
                     # set capacities of both edges to p0
-                    node.capacities[neighbor.key] = [segmentationClass.p0] * 2
-
-                    # set all new edge flows to zero
-                    node.flows[neighbor.key] = [0] * 2
+                    node.capacities[neighbor.key] = [self.p0] * 2
 
         # Add source and sink nodes to graph
-        source = vertex(key, dim=N)
-        sink = vertex(key + 1, dim=N)
+        print("k: ", k)
+        source = vertex(key=k, dim=N)
+        k += 1
+        print("k: ", k)
+        sink = vertex(key=k, dim=N)
         G.append(source)
         G.append(sink)
 
@@ -100,40 +109,85 @@ class segmentationClass:
             sink.edgesIn.append(node.key)
 
             # set capacities on edges from source and to sink
-            source.capacities[node.key] = [0, segmentationClass.foregroundProb(node, G)]
-            source.capacities[node.key] = [segmentationClass.backgroundProb(node, G), 0]
+            source.capacities[node.key] = [
+                self.foregroundProb(node, G),
+                0,
+            ]
+            sink.capacities[node.key] = [
+                0,
+                self.backgroundProb(node, G),
+            ]
 
-            # set flows to zero on all new edges
-            source.flows[node.key] = [0] * 2
-            sink.flows[node.key] = [0] * 2
+        # Initialize redsidual graph
+        Gf = G
+        s = Gf[-2]
+        t = Gf[-1]
 
-        # call FF on graph
+        # call FF on residual graph
+        Gf = self.findMinCut(Gf, s, t)
 
         # classify nodes as FG or BG by checking
-        # if each node is connected to FG, if not, they are in BG
-
+        # if each node is connected to source (FG), if not, they are in BG
         # return N*N*1 array, last dim is class 0 (BG) or 1 (FG)
-        return -1
+        outputImage = [[0] * N] * N
+        for node in Gf[:-2]:
+            if s.capacities[node][0] == 0:
+                outputImage[node.pos[0], node.pos[1]] = 1
+
+        return outputImage
 
     # Ford Fulkerson (FF) Alg for Min Cut
     # remove edges from graph to produce min cut
-    def findMinCut(G):
-        # all flows in G start at 0
-        # while there is an s-t path in residual graph G'
-        # (use bfs or dfs to find an s-t path)
-        # let P be a simple s-t path in Gf
-        # f' = augment(f,P)
-        # update f to be f'
-        # update the residual graph Gf to be Gf'
-        # endwhile
-        # return f
-        return -1
+    def findMinCut(self, Gf, source, sink):
+
+        # Store the path from BFS
+        parent = [-1] * len(Gf)
+
+        # All flows start at zero
+        maxFlow = 0
+
+        # Use BFS to add flow while there is an s-t path
+        while self.BFS(Gf, source, sink, parent):
+
+            # Find max flow through the augmenting path
+            # This is equal to the min residual capacity of the
+            # edges along the path
+            # start augmenting path flow at infinity to make
+            # sure any existing capacity is less than it
+            augmenting_flow = float("Inf")
+            s = sink.key  # start from sink
+            while s != source:
+                # update aug flow to min of edge from parent to s and aug flow
+                augmenting_flow = min(augmenting_flow, Gf[parent[s]].capacities[s][1])
+
+                # move to next node in path
+                s = parent[s]
+
+            # Add augmenting flow to total max flow
+            maxFlow += augmenting_flow
+
+            # Update residual capacities of edges along the path
+            # reverse edges if needed
+            curr = sink
+            while curr != source:
+                prev = parent[curr]
+                # decrement resid cap from parent to current node
+                Gf[prev].capacities[curr][0] -= augmenting_flow
+                Gf[curr].capacities[prev][1] -= augmenting_flow
+
+                # increment resid cap from current to parent
+                Gf[prev].capacities[curr][1] += augmenting_flow
+                Gf[curr].capacities[prev][0] += augmenting_flow
+
+                curr = parent[curr]
+
+        return Gf
 
     # BFS for FF
     # This makes my FF the Edmonds-Karp variation of the algorithm
     # reference: https://www.geeksforgeeks.org/minimum-cut-in-a-directed-graph/?ref=rp
     # parent is a list to store the s-t path
-    def bfs(Gf, s, t, parent):
+    def bfs(self, Gf, s, t, parent):
         # list to store visited nodes
         visited = [False] * len(Gf)
 
@@ -160,25 +214,20 @@ class segmentationClass:
 
         return True if visited[t] else False
 
-    # FIXME remove?
-    # DFS to traverse the original graph?
-    def dfs(G):
-        return -1
-
     # The probability a pixel node is in the foreground
     # Defined as 442 - Euclidean dist between RBG vals of x and x_a
-    def foregroundProb(x, G):
+    def foregroundProb(self, x, G):
         N = np.sqrt(len(G) - 2)
         Grid = np.reshape(G, (-1, N))
-        x_a_key = Grid[segmentationClass.x_a[0], segmentationClass.x_a[1]].key
+        x_a_key = Grid[self.x_a[0], self.x_a[1]].key
         d = np.round(np.sqrt(((Grid[x_a_key].rgb - x.rgb) ** 2).sum()))
         return 442 - d
 
     # The probability a pixel node is in the background
     # Defined as 442 - Euclidean dist between RBG vals of x and x_b
-    def backgroundProb(x, G):
+    def backgroundProb(self, x, G):
         N = np.sqrt(len(G) - 2)
         Grid = np.reshape(G, (-1, N))
-        x_b_key = Grid[segmentationClass.x_b[0], segmentationClass.x_b[1]].key
+        x_b_key = Grid[self.x_b[0], self.x_b[1]].key
         d = np.round(np.sqrt(((Grid[x_b_key].rgb - x.rgb) ** 2).sum()))
         return 442 - d
