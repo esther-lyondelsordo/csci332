@@ -185,6 +185,7 @@ class segmentationClass:
         # All flows start at zero
         maxFlow = 0
 
+        # FIXME infinite loop !!!!!!!!!!!!!!!!
         # Use BFS to add flow while there is an s-t path
         while self.bfs(Gf=Gf, s=source, t=sink, parent=parent):
             print("entering min cut while loop")
@@ -196,37 +197,38 @@ class segmentationClass:
             # sure any existing capacity is less than it
             augmenting_flow = float("Inf")
             s = sink.key  # start from sink
-            while s != source:
+            while s != source.key:
                 print("entering loop where we find the augmenting flow")
                 # update aug flow to min of edge from parent to s and aug flow
-                augmenting_flow = min(augmenting_flow, Gf[parent[s]].capacities[s][1])
+                print("parent[s]: ", parent[s])  # There is a problem with parent
+                augmenting_flow = min(augmenting_flow, Gf[parent[s]].capacities[s][0])
+                print("augmenting_flow", augmenting_flow)
 
                 # move to next node in path
                 s = parent[s]
 
             # Add augmenting flow to total max flow
             maxFlow += augmenting_flow
-            print("augmenting_flow: ", augmenting_flow)
 
             # Update residual capacities of edges along the path
             # reverse edges if needed
             curr = sink
-            while curr != source:
+            while curr.key != source.key:
                 print("entering loop where flows are adjusted")
-                prev = parent[curr]
+                prev = Gf[parent[curr.key]]
                 # decrement resid cap from parent to current node
-                Gf[prev].capacities[curr][0] -= augmenting_flow
-                print("Gf[prev].capacities[curr][0]: ", Gf[prev].capacities[curr][0])
-                Gf[curr].capacities[prev][1] -= augmenting_flow
-                print("Gf[curr].capacities[prev][1]: ", Gf[curr].capacities[prev][1])
+                prev.capacities[curr.key][0] -= augmenting_flow
+                print("Gf[prev].capacities[curr][0]: ", prev.capacities[curr.key][0])
+                curr.capacities[prev.key][1] -= augmenting_flow
+                print("Gf[curr].capacities[prev][1]: ", curr.capacities[prev.key][1])
 
                 # increment resid cap from current to parent
-                Gf[prev].capacities[curr][1] += augmenting_flow
-                print("Gf[curr].capacities[prev][1]: ", Gf[curr].capacities[prev][1])
-                Gf[curr].capacities[prev][0] += augmenting_flow
-                print("Gf[curr].capacities[prev][0]: ", Gf[curr].capacities[prev][0])
+                prev.capacities[curr.key][1] += augmenting_flow
+                print("Gf[curr].capacities[prev][1]: ", curr.capacities[prev.key][1])
+                curr.capacities[prev.key][0] += augmenting_flow
+                print("Gf[curr].capacities[prev][0]: ", curr.capacities[prev.key][0])
 
-                curr = parent[curr]
+                curr = Gf[parent[curr.key]]
 
         return Gf
 
@@ -257,7 +259,7 @@ class segmentationClass:
                 if visited[index] == False and u.capacities[index]:
                     queue.append(Gf[index])
                     visited[index] = True
-                    parent[index] = u
+                    parent[index] = u.key
 
         return True if visited[t.key] else False
 
