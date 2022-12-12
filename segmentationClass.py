@@ -10,9 +10,10 @@ segmentation algorithm from Kelinberg-Tardos 7.10
 """
 
 import numpy as np
+import copy
 
 """
-Vertex class to build graph nodes
+Vertex class to build graph nodes and store their associated data
 """
 
 
@@ -26,6 +27,7 @@ class vertex:
         edgesIn=None,
         edgesOut=None,
         capacities=None,
+        parent=None,
     ):
         self.key = key
 
@@ -44,6 +46,9 @@ class vertex:
         # key = key of other node in edge,
         # value = [capacity of edge in to other node, capacity of edge out of other node]
         self.capacities = {} if capacities is not None else None
+
+        # Store the path from BFS by storing the parent of each node
+        self.parent = parent if parent is not None else None
 
 
 """
@@ -93,7 +98,7 @@ class segmentationClass:
             node.edgesIn = []
             node.edgesOut = []
             node.capacities = {}
-            for neighbor in G[node.key :]:
+            for neighbor in G:
                 # If the Euclidean distance between nodes is
                 # less than 2, the edge weight is p0
                 # and zero otherwise
@@ -116,49 +121,50 @@ class segmentationClass:
         G.append(source)
 
         # Initialize source and sink attributes
-        s = G[-1]
-        t = G[-2]
-        s.edgesIn = []
-        s.edgesOut = []
-        s.capacities = {}
-        t.edgesIn = []
-        t.edgesOut = []
-        t.capacities = {}
+        # s = copy.copy(G[-1])
+        # t = copy.copy(G[-2])
+        G[-1].edgesIn = []
+        G[-1].edgesOut = []
+        G[-1].capacities = {}
+        G[-2].edgesIn = []
+        G[-2].edgesOut = []
+        G[-2].capacities = {}
 
         # connect source and sink to all pixel nodes
         for node in G[:-2]:
             # connect source and sink to all nodes
-            s.edgesOut.append(node.key)
-            node.edgesIn.append(s.key)
-            t.edgesIn.append(node.key)
-            node.edgesOut.append(t.key)
+            G[-1].edgesOut.append(node.key)
+            node.edgesIn.append(G[-1].key)
+            G[-2].edgesIn.append(node.key)
+            node.edgesOut.append(G[-2].key)
 
             # set capacities on edges from source and to sink
-            s.capacities[node.key] = [
+            G[-1].capacities[node.key] = [
                 self.foregroundProb(node, G),
                 0,
             ]
-            t.capacities[node.key] = [
+            G[-2].capacities[node.key] = [
                 0,
                 self.backgroundProb(node, G),
             ]
-            node.capacities[s.key] = [0, self.backgroundProb(node, G)]
-            node.capacities[t.key] = [self.foregroundProb(node, G), 0]
+            node.capacities[G[-1].key] = [0, self.backgroundProb(node, G)]
+            node.capacities[G[-2].key] = [self.foregroundProb(node, G), 0]
 
         # Initialize redsidual graph
-        Gf = G
-        s = Gf[-1]
-        t = Gf[-2]
+        Gf = copy.deepcopy(G)
+        print("src.edgesOut", Gf[-1].edgesOut)
 
         # call FF on residual graph
-        Gf = self.findMinCut(Gf=Gf, source=s, sink=t)
+        print("src: ", Gf[-1])
+        print("sin: ", Gf[-2])
+        Gf = self.findMinCut(Gf=Gf, source=Gf[-1], sink=Gf[-2])
 
         # Call DFS on residual graph to check connectivity
         # classify nodes as FG or BG by checking
         # if each node is connected to source (FG), if not, they are in BG
         # return N*N*1 array, last dim is class 0 (BG) or 1 (FG)
         visited = [False] * len(Gf)
-        self.dfs(Gf, s, visited)
+        self.dfs(Gf, Gf[-1], visited)
         outputArray = [[0] * N] * N
 
         # traverse all pixel nodes
@@ -178,17 +184,18 @@ class segmentationClass:
     # Ford Fulkerson (FF) Alg for Min Cut
     # remove edges from graph to produce min cut
     def findMinCut(self, Gf, source, sink):
-
-        # Store the path from BFS
-        parent = [-1] * len(Gf)
+        print("source: ", source)
+        print("sink: ", sink)
 
         # All flows start at zero
         maxFlow = 0
 
         # FIXME infinite loop !!!!!!!!!!!!!!!!
         # Use BFS to add flow while there is an s-t path
-        while self.bfs(Gf=Gf, s=source, t=sink, parent=parent):
+        while self.bfs(Gf, source, sink):
             print("entering min cut while loop")
+            print("source: ", source)
+            print("sink: ", sink)
 
             # Find max flow through the augmenting path
             # This is equal to the min residual capacity of the
@@ -196,39 +203,48 @@ class segmentationClass:
             # start augmenting path flow at infinity to make
             # sure any existing capacity is less than it
             augmenting_flow = float("Inf")
-            s = sink.key  # start from sink
-            while s != source.key:
+            s = copy.copy(sink)  # start from sink
+            print("s: ", s)
+            while s.key != source.key:
                 print("entering loop where we find the augmenting flow")
                 # update aug flow to min of edge from parent to s and aug flow
-                print("parent[s]: ", parent[s])  # There is a problem with parent
-                augmenting_flow = min(augmenting_flow, Gf[parent[s]].capacities[s][0])
+                print("Gf[s].parent: ", s.parent)  # There is a problem with parent
+                parent = s.parent
+                print(
+                    "Gf[parent[s]].capacities[s][0]: ", Gf[parent].capacities[s.key][0]
+                )
+                augmenting_flow = min(augmenting_flow, Gf[parent].capacities[s.key][0])
                 print("augmenting_flow", augmenting_flow)
 
                 # move to next node in path
-                s = parent[s]
+                s = copy.copy(Gf[parent])
 
             # Add augmenting flow to total max flow
             maxFlow += augmenting_flow
 
             # Update residual capacities of edges along the path
             # reverse edges if needed
-            curr = sink
+            curr = copy.copy(sink)
+            print("curr: ", curr)
+            print("sink: ", sink)
+            print("curr.key: ", curr.key)
             while curr.key != source.key:
+                parent = curr.parent
                 print("entering loop where flows are adjusted")
-                prev = Gf[parent[curr.key]]
+                prev = copy.copy(Gf[parent])
                 # decrement resid cap from parent to current node
                 prev.capacities[curr.key][0] -= augmenting_flow
-                print("Gf[prev].capacities[curr][0]: ", prev.capacities[curr.key][0])
+                print("prev.capacities[curr.key][0]: ", prev.capacities[curr.key][0])
                 curr.capacities[prev.key][1] -= augmenting_flow
-                print("Gf[curr].capacities[prev][1]: ", curr.capacities[prev.key][1])
+                print("curr.capacities[prev.key][1]: ", curr.capacities[prev.key][1])
 
                 # increment resid cap from current to parent
                 prev.capacities[curr.key][1] += augmenting_flow
-                print("Gf[curr].capacities[prev][1]: ", curr.capacities[prev.key][1])
+                print("prev.capacities[curr.key][1]: ", prev.capacities[curr.key][1])
                 curr.capacities[prev.key][0] += augmenting_flow
-                print("Gf[curr].capacities[prev][0]: ", curr.capacities[prev.key][0])
+                print("curr.capacities[prev.key][0]: ", curr.capacities[prev.key][0])
 
-                curr = Gf[parent[curr.key]]
+                curr = copy.copy(Gf[curr.parent])
 
         return Gf
 
@@ -236,7 +252,7 @@ class segmentationClass:
     # This makes my FF the Edmonds-Karp variation of the algorithm
     # reference: https://www.geeksforgeeks.org/minimum-cut-in-a-directed-graph/?ref=rp
     # parent is a list to store the s-t path
-    def bfs(self, Gf, s, t, parent):
+    def bfs(self, Gf, s, t):
         # list to store visited nodes
         visited = [False] * len(Gf)
 
@@ -244,22 +260,27 @@ class segmentationClass:
         queue = []
 
         # add source to queue and mark as visited
-        queue.append(s)
+        queue.append(s.key)
         visited[s.key] = True
 
         # BFS loop
         while not not queue:
             # dequeue first node in queue
-            u = queue.pop(0)
+            u = copy.copy(Gf[queue.pop(0)])  # FIXME do I need copy.copy?
 
             # Get all adjacent vertices of the dequeued vertex u
             # If a adjacent has not been visited, then mark it
             # visited and enqueue it
-            for index in u.edgesOut:
-                if visited[index] == False and u.capacities[index]:
-                    queue.append(Gf[index])
+            print("u.edgesOut", u.edgesOut)
+            adj = u.edgesOut
+            for index in list(reversed(adj)):
+                if visited[index] == False and u.capacities[index][0] > 0:
+                    next = copy.copy(Gf[index])
+                    queue.append(next.key)
                     visited[index] = True
-                    parent[index] = u.key
+                    next.parent = u.key
+                    print("index: ", index)
+                    print("key appended to parent: ", u.key)
 
         return True if visited[t.key] else False
 
