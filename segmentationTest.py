@@ -45,6 +45,6 @@ axs[0].imshow(I.astype(np.uint8), interpolation="nearest")
 axs[0].set_title("Input image")
 
 # scale 0s and 1s in output image to 0 or 255
-axs[1].imshow(255 * newI.astype(np.uint8), interpolation="nearest")
+axs[1].imshow(255 * newI.astype(np.uint8), interpolation="nearest", cmap="Greys")
 axs[1].set_title("Binary segmentation")
 plt.show()
