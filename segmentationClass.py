@@ -82,14 +82,11 @@ class segmentationClass:
         k = 0
         for i in range(N):
             for j in range(N):
-                newNode = vertex(
-                    key=k,
-                    dim=N,
-                    pos=np.array([i, j]),
-                    rgb=(np.rint(I[i][j])).astype(
-                        int
-                    ),  # round float rgb vals to nearest int
-                )
+                newNode = vertex(key=k, dim=N, pos=np.array([]), rgb=np.array([]),)
+                newNode.pos = np.array([i, j])
+                newNode.rgb = I[i][j].astype(
+                    int
+                )  # .astype(int),  # change float rgb vals to int
                 G.append(newNode)
                 k += 1
 
@@ -143,26 +140,19 @@ class segmentationClass:
                 self.foregroundProb(node.key, G),
                 0,
             ]
-            print("G[s].capacities[node.key]", G[s].capacities[node.key])
             G[t].capacities[node.key] = [
                 0,
                 self.backgroundProb(node.key, G),
             ]
-            print("G[t].capacities[node.key]", G[t].capacities[node.key])
             node.capacities[G[s].key] = [0, self.backgroundProb(node.key, G)]
-            print("node.capacities[G[s].key]", node.capacities[G[s].key])
             node.capacities[G[t].key] = [self.foregroundProb(node.key, G), 0]
-            print("node.capacities[G[t].key]", node.capacities[G[t].key])
 
         # Initialize redsidual graph
         Gf = copy.deepcopy(G)
-        print("src.edgesOut", Gf[-1].edgesOut)
 
         # call FF on residual graph
         src = len(Gf) - 1
         sin = len(Gf) - 2
-        print("src: ", src)
-        print("sin: ", sin)
         Gf = self.findMinCut(Gf=Gf, source=src, sink=sin)
 
         # Call DFS on residual graph to check connectivity
@@ -176,32 +166,33 @@ class segmentationClass:
         # traverse all pixel nodes
         # if a node is visited by dfs from s and
         # the edge to a neighbor has become zero, then it is in FG
-        for node in Gf[:-2]:
-            for neighbor in Gf[:-2]:
-                if (
-                    Gf[node.key].capacities[neighbor.key][0] == 0
-                    and G[node.key].capacities[neighbor.key][0] > 0
-                    and visited[node.key]
-                ):
-                    outputArray[node.pos[0]][node.pos[1]] = 1
+        for i in range(len(Gf) - 2):
+            for j in range(len(Gf) - 2):
+                print("i: ", i)
+                print("j", j)
+                print("Gf[i].capacities[j][0]", Gf[i].capacities[j][0])
+                print("Gf[i].capacities[j][0] == 0", Gf[i].capacities[j][0] == 0)
+                print("G[i].capacities[j][0] > 0", G[i].capacities[j][0] > 0)
+                print("visited[i]", visited[i])
+                if j in Gf[i].capacities:
+                    if (
+                        Gf[i].capacities[j][0] == 0
+                        and G[i].capacities[j][0] > 0
+                        and visited[i]
+                    ):
+                        outputArray[G[i].pos[0]][G[i].pos[1]] = 1
 
         return np.array(outputArray)
 
     # Ford Fulkerson (FF) Alg for Min Cut
     # remove edges from graph to produce min cut
     def findMinCut(self, Gf, source, sink):
-        print("source: ", Gf[source])
-        print("sink: ", Gf[sink])
 
         # All flows start at zero
         maxFlow = 0
 
-        # FIXME infinite loop !!!!!!!!!!!!!!!!
         # Use BFS to add flow while there is an s-t path
         while self.bfs(Gf, source, sink):
-            print("entering min cut while loop")
-            print("source: ", Gf[source])
-            print("sink: ", Gf[sink])
 
             # Find max flow through the augmenting path
             # This is equal to the min residual capacity of the
@@ -210,15 +201,11 @@ class segmentationClass:
             # sure any existing capacity is less than it
             augmenting_flow = float("Inf")
             s = sink  # start from sink
-            print("s: ", s)
             while s != source:
-                print("entering loop where we find the augmenting flow")
                 # update aug flow to min of edge from parent to s and aug flow
-                print("Gf[s].parent: ", Gf[s].parent)  # There is a problem with parent
                 parent = Gf[s].parent
-                print("Gf[parent[s]].capacities[s][0]: ", Gf[parent].capacities[s][0])
                 augmenting_flow = min(augmenting_flow, Gf[parent].capacities[s][0])
-                print("augmenting_flow", augmenting_flow)
+                print("poss augmenting flow: ", Gf[parent].capacities[s][0])
 
                 # move to next node in path
                 s = Gf[parent].key
@@ -229,24 +216,17 @@ class segmentationClass:
             # Update residual capacities of edges along the path
             # reverse edges if needed
             curr = sink
-            print("curr: ", Gf[curr])
-            print("sink: ", Gf[sink])  # TODO
             while curr != source:
-                print("entering loop where flows are adjusted")
-                print("curr.parent: ", Gf[curr].parent)
                 parent = Gf[curr].parent
                 prev = Gf[parent].key
+
                 # decrement resid cap from parent to current node
                 Gf[prev].capacities[curr][0] -= augmenting_flow
-                print("prev.capacities[curr.key][0]: ", Gf[prev].capacities[curr][0])
                 Gf[curr].capacities[prev][1] -= augmenting_flow
-                print("curr.capacities[prev.key][1]: ", Gf[curr].capacities[prev][1])
 
                 # increment resid cap from current to parent
                 Gf[prev].capacities[curr][1] += augmenting_flow
-                print("prev.capacities[curr.key][1]: ", Gf[prev].capacities[curr][1])
                 Gf[curr].capacities[prev][0] += augmenting_flow
-                print("curr.capacities[prev.key][0]: ", Gf[curr].capacities[prev][0])
 
                 curr = Gf[curr].parent
 
@@ -275,7 +255,6 @@ class segmentationClass:
             # Get all adjacent vertices of the dequeued vertex u
             # If a adjacent has not been visited, then mark it
             # visited and enqueue it
-            print("u.edgesOut", u.edgesOut)
             adj = u.edgesOut
             for index in list(reversed(adj)):
                 if visited[index] == False and u.capacities[index][0] > 0:
@@ -283,9 +262,6 @@ class segmentationClass:
                     queue.append(index)
                     visited[index] = True
                     Gf[index].parent = u.key
-                    print("index: ", index)
-                    print("key appended to parent: ", u.key)
-                    print("Gf[index].parent: ", Gf[index].parent)
 
         return True if visited[t] else False
 
@@ -294,7 +270,6 @@ class segmentationClass:
     def dfs(self, Gf, s, visited):
         visited[s] = True
         # traverse all pixel nodes)
-        print("Gf[s].capacities: ", Gf[s].capacities)
         for node in Gf[:-2]:
             if Gf[s].capacities[node.key][0] > 0 and not visited[node.key]:
                 self.dfs(Gf, node.key, visited)
@@ -306,6 +281,9 @@ class segmentationClass:
         # Get index of x_a in G from x_a coordinates
         x_a_key = int((N * self.x_a[0]) + self.x_a[1])
 
+        print("G[x_a_key].rgb: ", G[x_a_key].rgb)
+        print("G[x].rgb", G[x].rgb)
+
         # Calculate 442 - Euclidean dist between RBG vals of x and x_a
         d = np.round(np.sqrt(((G[x_a_key].rgb - G[x].rgb) ** 2).sum()))
         return int(442 - d)
@@ -316,6 +294,9 @@ class segmentationClass:
 
         # Get index of x_b in G from x_b coordinates
         x_b_key = int((N * self.x_b[0]) + self.x_b[1])
+
+        print("G[x_b_key].rgb: ", G[x_b_key].rgb)
+        print("G[x].rgb", G[x].rgb)
 
         # Calculate 442 - Euclidean dist between RBG vals of x and x_b
         d = np.round(np.sqrt(((G[x_b_key].rgb - G[x].rgb) ** 2).sum()))
