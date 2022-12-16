@@ -28,6 +28,7 @@ class vertex:
         edgesOut=None,
         capacities=None,
         parent=None,
+        visited=None,
     ):
         self.key = key
 
@@ -49,6 +50,7 @@ class vertex:
 
         # Store the path from BFS by storing the parent of each node
         self.parent = parent if parent is not None else None
+        self.visited = visited if visited is not None else None
 
 
 """
@@ -67,8 +69,8 @@ class segmentationClass:
     Input: I is an NxNx3 numpy array representing a color (RGB) image. Each pixel
     intensity will be have an integer value between 0 and 255.
     ● Output: L is an NxNx1 numpy array of binary values representing whether each pixel
-    in the image is in the foreground (value of 1) or in the background (value of 0). So, if
-    pixel at row (i,j) is in the foreground then L[i,j] = 1, and if it is in the background we
+    in the image is in the foreground (value of 1), white, or in the background (value of 0), black. 
+    So, if pixel at row (i,j) is in the foreground then L[i,j] = 1, and if it is in the background we
     have L[i,j] = 0.
     """
 
@@ -159,8 +161,10 @@ class segmentationClass:
         # classify nodes as FG or BG by checking
         # if each node is connected to source (FG), if not, they are in BG
         # return N*N*1 array, last dim is class 0 (BG) or 1 (FG)
-        visited = [False] * len(Gf)
-        self.dfs(Gf=Gf, s=src, visited=visited)
+        # visited = [False] * len(Gf)
+        for node in Gf:
+            node.visited = False
+        self.dfs(Gf=Gf, s=src)
         outputArray = [[0] * N] * N
 
         # traverse all pixel nodes
@@ -168,17 +172,11 @@ class segmentationClass:
         # the edge to a neighbor has become zero, then it is in FG
         for i in range(len(Gf) - 2):
             for j in range(len(Gf) - 2):
-                print("i: ", i)
-                print("j", j)
-                print("Gf[i].capacities[j][0]", Gf[i].capacities[j][0])
-                print("Gf[i].capacities[j][0] == 0", Gf[i].capacities[j][0] == 0)
-                print("G[i].capacities[j][0] > 0", G[i].capacities[j][0] > 0)
-                print("visited[i]", visited[i])
                 if j in Gf[i].capacities:
                     if (
                         Gf[i].capacities[j][0] == 0
                         and G[i].capacities[j][0] > 0
-                        and visited[i]
+                        and Gf[i].visited
                     ):
                         outputArray[G[i].pos[0]][G[i].pos[1]] = 1
 
@@ -205,7 +203,6 @@ class segmentationClass:
                 # update aug flow to min of edge from parent to s and aug flow
                 parent = Gf[s].parent
                 augmenting_flow = min(augmenting_flow, Gf[parent].capacities[s][0])
-                print("poss augmenting flow: ", Gf[parent].capacities[s][0])
 
                 # move to next node in path
                 s = Gf[parent].key
@@ -265,14 +262,15 @@ class segmentationClass:
 
         return True if visited[t] else False
 
+    # TODO: fix DFS
     # DFS to traverse residual graph and find cuts
     # reference: https://www.geeksforgeeks.org/minimum-cut-in-a-directed-graph/?ref=rp
-    def dfs(self, Gf, s, visited):
-        visited[s] = True
+    def dfs(self, Gf, s):
+        Gf[s].visited = True
         # traverse all pixel nodes)
-        for node in Gf[:-2]:
-            if Gf[s].capacities[node.key][0] > 0 and not visited[node.key]:
-                self.dfs(Gf, node.key, visited)
+        for i in range(len(Gf) - 2):
+            if Gf[s].capacities[i][0] > 0 and not Gf[i].visited:
+                self.dfs(Gf, i)
 
     # The probability a pixel node is in the foreground
     def foregroundProb(self, x, G):
@@ -280,9 +278,6 @@ class segmentationClass:
 
         # Get index of x_a in G from x_a coordinates
         x_a_key = int((N * self.x_a[0]) + self.x_a[1])
-
-        print("G[x_a_key].rgb: ", G[x_a_key].rgb)
-        print("G[x].rgb", G[x].rgb)
 
         # Calculate 442 - Euclidean dist between RBG vals of x and x_a
         d = np.round(np.sqrt(((G[x_a_key].rgb - G[x].rgb) ** 2).sum()))
@@ -294,9 +289,6 @@ class segmentationClass:
 
         # Get index of x_b in G from x_b coordinates
         x_b_key = int((N * self.x_b[0]) + self.x_b[1])
-
-        print("G[x_b_key].rgb: ", G[x_b_key].rgb)
-        print("G[x].rgb", G[x].rgb)
 
         # Calculate 442 - Euclidean dist between RBG vals of x and x_b
         d = np.round(np.sqrt(((G[x_b_key].rgb - G[x].rgb) ** 2).sum()))
